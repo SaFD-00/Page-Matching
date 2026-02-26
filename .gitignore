@@ -32,6 +32,11 @@ app_collector/app/build/
 app_collector/.gradle/
 app_collector/local.properties
 
+# Collected data (runtime generated)
+MobileCollector/Server/data/_temp/
+MobileCollector/Server/data/apps.csv
+MobileCollector/Server/data/*/
+
 # Environment
 .env
 *.log

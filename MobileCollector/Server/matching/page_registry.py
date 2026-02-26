@@ -10,6 +10,7 @@ class PageRegistry:
 
     def __init__(self):
         self._bundles: dict[str, PageKnowledge] = {}
+        self._encoded_xmls: dict[str, list[str]] = {}  # bundle_id -> list of encoded XMLs
 
     def add(self, page_knowledge: PageKnowledge) -> None:
         self._bundles[page_knowledge.bundle_id] = page_knowledge
@@ -43,12 +44,25 @@ class PageRegistry:
                 if keyui_attrs:
                     bundle.keyuis[subtask.name] = keyui_attrs
 
+    def add_encoded_xml(self, bundle_id: str, encoded_xml: str) -> None:
+        """Store an encoded XML for a bundle (for VARIANT matching)."""
+        if bundle_id not in self._encoded_xmls:
+            self._encoded_xmls[bundle_id] = []
+        if encoded_xml not in self._encoded_xmls[bundle_id]:
+            self._encoded_xmls[bundle_id].append(encoded_xml)
+
+    def has_identical_xml(self, bundle_id: str, encoded_xml: str) -> bool:
+        """Check if a bundle already has this exact encoded XML."""
+        return encoded_xml in self._encoded_xmls.get(bundle_id, [])
+
     def remove(self, bundle_id: str) -> None:
         if bundle_id in self._bundles:
             del self._bundles[bundle_id]
+        self._encoded_xmls.pop(bundle_id, None)
 
     def clear(self) -> None:
         self._bundles.clear()
+        self._encoded_xmls.clear()
 
     def __len__(self) -> int:
         return len(self._bundles)
@@ -63,7 +77,8 @@ class PageRegistry:
                 "app_name": bundle.app_name,
                 "subtasks": [s.model_dump() for s in bundle.subtasks],
                 "keyuis": {name: [ui.to_dict() for ui in attrs] for name, attrs in bundle.keyuis.items()},
-                "extra_uis": [ui.to_dict() for ui in bundle.extra_uis]
+                "extra_uis": [ui.to_dict() for ui in bundle.extra_uis],
+                "encoded_xmls": self._encoded_xmls.get(bundle_id, []),
             }
             for bundle_id, bundle in self._bundles.items()
         }
@@ -81,4 +96,6 @@ class PageRegistry:
                 subtasks=subtasks, keyuis=keyuis, extra_uis=extra_uis
             )
             registry.add(bundle)
+            for xml_str in bundle_data.get("encoded_xmls", []):
+                registry.add_encoded_xml(bundle_id, xml_str)
         return registry

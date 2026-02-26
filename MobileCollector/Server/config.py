@@ -14,6 +14,8 @@ SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 # Defaults
 DEFAULT_PORT = 12345
 DEFAULT_THRESHOLD = 1.0
+DEFAULT_SUBTASK_THRESHOLD = 0.7
+DEFAULT_MEMORY_DIR = "./memory"
 DEFAULT_MODEL = "gpt-5.2"
 DEFAULT_REASONING_EFFORT = "medium"
 DEFAULT_DATA_DIR = "./data"
@@ -25,11 +27,11 @@ RETRY_DELAY = 1.0
 
 # Safety categories
 UNSAFE_CATEGORIES = {
-    "financial": ["pay", "purchase", "subscribe", "order", "buy", "checkout", "transaction"],
+    "financial": ["pay", "purchase", "subscribe", "buy", "checkout", "transaction"],
     "account": ["login", "logout", "delete_account", "sign_in", "sign_up", "register"],
     "system": ["install", "uninstall", "reset", "format", "factory_reset"],
     "data": ["delete", "clear_all", "remove_all", "erase"],
-    "communication": ["send", "post", "message", "call", "email"],
+    "communication": ["send", "compose", "post", "dial"],
 }
 
 
@@ -43,4 +45,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-vision", dest="vision", action="store_false", help="Disable vision mode")
     parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR, help=f"Data directory (default: {DEFAULT_DATA_DIR})")
     parser.add_argument("--reasoning-effort", type=str, default=DEFAULT_REASONING_EFFORT, help="Reasoning effort (none, low, medium, high)")
+    parser.add_argument("--subtask-threshold", type=float, default=DEFAULT_SUBTASK_THRESHOLD, help=f"Subtask overlap threshold for VARIANT matching (default: {DEFAULT_SUBTASK_THRESHOLD})")
+    parser.add_argument("--memory-dir", type=str, default=DEFAULT_MEMORY_DIR, help=f"Memory directory for MobileGPT-V2 format (default: {DEFAULT_MEMORY_DIR})")
     return parser.parse_args()

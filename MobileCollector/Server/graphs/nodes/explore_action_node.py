@@ -4,12 +4,33 @@ import xml.etree.ElementTree as ET
 from collections import deque
 from loguru import logger
 
+from ...agents.history_agent import HistoryAgent
+from ...utils.llm_client import LLMClient
+
+
+# Module-level singletons
+_history_agent = None
+
+
+def _get_explore_components(state: dict):
+    """Lazy-init history agent and get shared explore memory from discover_node."""
+    global _history_agent
+    if _history_agent is None:
+        model = state.get("model", "gpt-5.2")
+        reasoning = state.get("reasoning_effort", "medium")
+        llm_client = LLMClient(model=model, reasoning_effort=reasoning)
+        _history_agent = HistoryAgent(llm_client=llm_client)
+    # Reuse the same ExploreMemoryAdapter instance from discover_node
+    from .discover_node import _explore_memory
+    return _history_agent, _explore_memory
+
 
 def explore_action_node(state: dict) -> dict:
     """Determine next exploration action using GREEDY algorithm.
 
     GREEDY: BFS from current page to find nearest unexplored subtask.
     """
+    history_agent, explore_memory = _get_explore_components(state)
     page_index = state["page_index"]
     unexplored = dict(state.get("unexplored_subtasks", {}))
     explored = dict(state.get("explored_subtasks", {}))
@@ -43,6 +64,23 @@ def explore_action_node(state: dict) -> dict:
             if ui_index >= 0:
                 action = _create_click_action(parsed_xml, ui_index, subtask_name)
                 if action:
+                    # Generate guideline and save to explore memory
+                    try:
+                        if history_agent and explore_memory:
+                            guideline = history_agent.generate_guidance(action, parsed_xml)
+                            explore_memory.mark_subtask_explored(
+                                page_index=page_index,
+                                subtask_name=subtask_name,
+                                trigger_ui_index=ui_index,
+                                action=action,
+                                start_page=page_index,
+                                end_page=-1,
+                                parsed_xml=parsed_xml,
+                                guideline=guideline,
+                            )
+                    except Exception as e:
+                        logger.warning(f"ExploreMemory nav mark_explored failed: {e}")
+
                     return {
                         "action": action,
                         "navigation_plan": remaining_plan,
@@ -64,7 +102,43 @@ def explore_action_node(state: dict) -> dict:
         logger.info(f"Exploring subtask '{subtask_name}' (ui={ui_index}) on page {page_index}")
 
         action = _create_click_action(parsed_xml, ui_index, subtask_name)
+
+        # Fallback: ui_index invalid → re-match using UIAttributes
+        if action is None and ui_index < 0:
+            ui_attrs_data = subtask_info.get("ui_attributes")
+            if ui_attrs_data:
+                fallback_index = _fallback_rematch(parsed_xml, ui_attrs_data)
+                if fallback_index >= 0:
+                    action = _create_click_action(parsed_xml, fallback_index, subtask_name)
+                    if action:
+                        ui_index = fallback_index
+                        logger.info(f"Fallback matched ui_index {fallback_index} for '{subtask_name}'")
+
         if action:
+            # Generate guideline and save to explore memory
+            try:
+                if history_agent and explore_memory:
+                    guideline = history_agent.generate_guidance(action, parsed_xml)
+                    explore_memory.mark_subtask_explored(
+                        page_index=page_index,
+                        subtask_name=subtask_name,
+                        trigger_ui_index=ui_index,
+                        action=action,
+                        start_page=page_index,
+                        end_page=-1,
+                        parsed_xml=parsed_xml,
+                        guideline=guideline,
+                    )
+                    if guideline:
+                        explore_memory.update_guideline(
+                            page_index=page_index,
+                            subtask_name=subtask_name,
+                            trigger_ui_index=ui_index,
+                            guideline=guideline,
+                        )
+            except Exception as e:
+                logger.warning(f"ExploreMemory mark_explored failed: {e}")
+
             return {
                 "action": action,
                 "navigation_plan": [],
@@ -76,7 +150,7 @@ def explore_action_node(state: dict) -> dict:
             }
         else:
             # Can't click this UI - mark as explored and try next
-            logger.warning(f"Cannot click ui_index {ui_index} for '{subtask_name}', skipping")
+            logger.warning(f"Cannot click for '{subtask_name}' (ui_index={ui_index}), skipping")
             current_unexplored_updated = [s for s in current_unexplored if s["name"] != subtask_name]
             unexplored[page_key] = current_unexplored_updated
 
@@ -177,6 +251,21 @@ def _create_click_action(parsed_xml: str, ui_index: int, subtask_name: str) -> d
         return None
 
 
+def _fallback_rematch(parsed_xml: str, ui_attrs_data) -> int:
+    """Fallback: re-match UIAttributes against current screen."""
+    try:
+        from ...matching.ui_matcher import UIMatcher
+        from ...data.models import UIAttributes
+        if isinstance(ui_attrs_data, dict):
+            ui_attrs_data = UIAttributes(**ui_attrs_data)
+        matcher = UIMatcher(parsed_xml)
+        indexes = matcher.get_matched_indexes(ui_attrs_data)
+        return indexes[0] if indexes else -1
+    except Exception as e:
+        logger.warning(f"Fallback rematch failed: {e}")
+        return -1
+
+
 def _find_nearest_unexplored(
     current_page: int,
     unexplored: dict,
@@ -220,3 +309,9 @@ def _find_nearest_unexplored(
                 queue.append((back_target, new_path))
 
     return None
+
+
+def reset_explore_action_state():
+    """Reset module-level singletons (for testing or reconnection)."""
+    global _history_agent
+    _history_agent = None

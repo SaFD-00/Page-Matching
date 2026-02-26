@@ -11,23 +11,28 @@ from .utils.network import get_real_ip
 from .handlers.message_handlers import MessageHandler
 from .graphs.collector_graph import compile_collector_graph
 from .graphs.nodes.discover_node import reset_discover_state
+from .graphs.nodes.explore_action_node import reset_explore_action_state
 
 
 class CollectorServer:
     """TCP server for MobileCollector auto exploration."""
 
     def __init__(self, port: int, data_dir: str, threshold: float,
-                 model: str, vision: bool, reasoning_effort: str):
+                 model: str, vision: bool, reasoning_effort: str,
+                 subtask_threshold: float = 0.7, memory_dir: str = "./memory"):
         self.port = port
         self.data_dir = data_dir
         self.threshold = threshold
         self.model = model
         self.vision = vision
         self.reasoning_effort = reasoning_effort
+        self.subtask_threshold = subtask_threshold
+        self.memory_dir = memory_dir
         self.buffer_size = 4096
 
-        # Ensure data directory exists
+        # Ensure directories exist
         os.makedirs(data_dir, exist_ok=True)
+        os.makedirs(memory_dir, exist_ok=True)
 
     def start(self):
         """Start the server."""
@@ -61,8 +66,9 @@ class CollectorServer:
         handler = MessageHandler(self.data_dir)
         graph = compile_collector_graph()
 
-        # Reset discover node state for new connection
+        # Reset node state for new connection
         reset_discover_state()
+        reset_explore_action_state()
 
         graph_state = None
         exploration_active = False
@@ -86,6 +92,8 @@ class CollectorServer:
                         "app_package": handler.app_package,
                         "data_dir": self.data_dir,
                         "threshold": self.threshold,
+                        "subtask_threshold": self.subtask_threshold,
+                        "memory_dir": self.memory_dir,
                         "vision_enabled": self.vision,
                         "model": self.model,
                         "reasoning_effort": self.reasoning_effort,

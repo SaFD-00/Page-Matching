@@ -13,9 +13,16 @@ from .ui_matcher import UIMatcher
 class PageMatcher:
     """Engine for matching pages to known pages."""
 
-    def __init__(self, page_registry: PageRegistry, threshold: float = 1.0, llm_client: Optional[LLMClient] = None):
+    def __init__(
+        self,
+        page_registry: PageRegistry,
+        threshold: float = 1.0,
+        subtask_threshold: float = 0.7,
+        llm_client: Optional[LLMClient] = None,
+    ):
         self.registry = page_registry
         self.threshold = threshold
+        self.subtask_threshold = subtask_threshold
         self.llm_client = llm_client
 
     def match(self, query_parsed_xml: str, candidate_bundle_id: str, query_page_id: str = "") -> MatchResult:
@@ -50,14 +57,80 @@ class PageMatcher:
     def match_all_candidates(self, query_parsed_xml: str, query_page_id: str = "") -> list[MatchResult]:
         return [self.match(query_parsed_xml, bid, query_page_id) for bid in self.registry.get_all_bundle_ids()]
 
-    def find_best_match(self, query_parsed_xml: str, query_page_id: str = "") -> Optional[MatchResult]:
+    def find_best_match(
+        self,
+        query_parsed_xml: str,
+        query_page_id: str = "",
+        query_subtask_names: Optional[list[str]] = None,
+        query_encoded_xml: Optional[str] = None,
+    ) -> Optional[MatchResult]:
+        # Step 1: Existing KeyUI-based matching
         results = self.match_all_candidates(query_parsed_xml, query_page_id)
         good_matches = [r for r in results if r.is_match()]
-        if not good_matches:
-            return None
-        type_priority = {"EQSET": 0, "SUPERSET": 1, "SUBSET": 2, "NEW": 3}
-        good_matches.sort(key=lambda r: (type_priority.get(r.match_type, 3), -r.match_ratio))
-        return good_matches[0]
+        if good_matches:
+            type_priority = {"EQSET": 0, "SUPERSET": 1, "SUBSET": 2, "VARIANT": 3, "NEW": 4}
+            good_matches.sort(key=lambda r: (type_priority.get(r.match_type, 4), -r.match_ratio))
+            return good_matches[0]
+
+        # Step 2: Subtask name overlap fallback (when all KeyUI matches are NEW)
+        if query_subtask_names and query_encoded_xml:
+            variant = self._find_subtask_variant(
+                query_subtask_names, query_encoded_xml, query_page_id
+            )
+            if variant:
+                return variant
+
+        return None
+
+    def _find_subtask_variant(
+        self,
+        query_subtask_names: list[str],
+        query_encoded_xml: str,
+        query_page_id: str,
+    ) -> Optional[MatchResult]:
+        """Fallback: find VARIANT match based on subtask name overlap + XML diff."""
+        best_overlap = 0.0
+        best_bundle_id = None
+
+        query_set = set(query_subtask_names)
+
+        for bundle_id in self.registry.get_all_bundle_ids():
+            knowledge = self.registry.get(bundle_id)
+            if knowledge is None:
+                continue
+
+            existing_names = {s.name for s in knowledge.subtasks}
+
+            # Jaccard similarity: |A∩B| / |A∪B|
+            intersection = existing_names & query_set
+            union = existing_names | query_set
+            overlap_ratio = len(intersection) / len(union) if union else 0.0
+
+            if overlap_ratio >= self.subtask_threshold:
+                # Must have XML diff to be VARIANT (not duplicate of exact same page)
+                if not self.registry.has_identical_xml(bundle_id, query_encoded_xml):
+                    if overlap_ratio > best_overlap:
+                        best_overlap = overlap_ratio
+                        best_bundle_id = bundle_id
+
+        if best_bundle_id:
+            knowledge = self.registry.get(best_bundle_id)
+            supported = [s.name for s in knowledge.subtasks if s.name in query_set]
+            logger.info(
+                f"VARIANT match: bundle={best_bundle_id}, overlap={best_overlap:.2f}, "
+                f"supported={len(supported)}/{len(query_set)}"
+            )
+            return MatchResult(
+                query_page_id=query_page_id,
+                candidate_bundle_id=best_bundle_id,
+                match_type="VARIANT",
+                supported_subtasks=supported,
+                match_ratio=best_overlap,
+                threshold=self.subtask_threshold,
+                remaining_ui_indexes=[],
+            )
+
+        return None
 
     def extract_new_subtasks(self, query_encoded_xml: str, match_result: MatchResult) -> list[Subtask]:
         if match_result.match_type != "SUPERSET" or not match_result.remaining_ui_indexes:

@@ -53,6 +53,10 @@ class CollectorState(TypedDict, total=False):
     current_subtasks: list  # list of Subtask dicts
     current_keyuis: dict  # {subtask_name: [UIAttributes dicts]}
 
+    # Memory pipeline
+    memory_dir: str  # MobileGPT-V2 format memory directory
+    subtask_threshold: float  # Subtask overlap threshold for VARIANT matching
+
     # Output
     action: Optional[dict]  # Action to send to client: {"name": str, "parameters": dict}
     status: str  # "exploring", "exploration_complete", "error"

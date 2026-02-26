@@ -4,8 +4,11 @@ from loguru import logger
 from ...agents.subtask_extractor import SubtaskExtractor
 from ...agents.keyui_selector import KeyUISelector
 from ...agents.safety_filter import SafetyFilter
+from ...agents.summary_agent import SummaryAgent
 from ...memory.collector_memory import CollectorMemory
+from ...memory.explore_memory import ExploreMemoryAdapter
 from ...storage.encoder import XmlEncoder
+from ...utils.llm_client import LLMClient
 from ...utils.xml_parser import extract_interactable_indexes
 
 
@@ -15,27 +18,41 @@ _keyui_selector = None
 _safety_filter = None
 _encoder = None
 _memory = None
+_explore_memory = None
+_summary_agent = None
 
 
 def _get_components(state: dict):
     """Lazy-init components."""
     global _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
+    global _explore_memory, _summary_agent
 
     if _subtask_extractor is None:
         model = state.get("model", "gpt-5.2")
         reasoning = state.get("reasoning_effort", "medium")
-        _subtask_extractor = SubtaskExtractor(model=model, reasoning_effort=reasoning)
-        _keyui_selector = KeyUISelector(model=model, reasoning_effort=reasoning)
+        llm_client = LLMClient(model=model, reasoning_effort=reasoning)
+        _subtask_extractor = SubtaskExtractor(llm_client=llm_client)
+        _keyui_selector = KeyUISelector(llm_client=llm_client)
         _safety_filter = SafetyFilter()
         _encoder = XmlEncoder()
+        _summary_agent = SummaryAgent(llm_client=llm_client)
 
     if _memory is None:
         _memory = CollectorMemory(
             data_dir=state["data_dir"],
             app_name=state["app_name"],
-            threshold=state.get("threshold", 1.0)
+            threshold=state.get("threshold", 1.0),
+            subtask_threshold=state.get("subtask_threshold", 0.7),
         )
         _memory.initialize()
+
+    if _explore_memory is None:
+        memory_dir = state.get("memory_dir", "./memory")
+        _explore_memory = ExploreMemoryAdapter(
+            memory_dir=memory_dir,
+            app_name=state["app_name"],
+        )
+        _explore_memory.initialize()
 
     return _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
 
@@ -138,14 +155,14 @@ def discover_node(state: dict) -> dict:
             unexplored_list = []
             for subtask in safe_subtasks:
                 ui_attrs_list = keyuis.get(subtask.name, [])
-                if ui_attrs_list:
-                    # Find the UI index from parsed XML
-                    ui_index = _find_keyui_index(parsed_xml, ui_attrs_list[0] if ui_attrs_list else None)
-                    unexplored_list.append({
-                        "name": subtask.name,
-                        "ui_index": ui_index,
-                        "description": subtask.description
-                    })
+                first_attrs = ui_attrs_list[0] if ui_attrs_list else None
+                ui_index = _find_keyui_index(parsed_xml, first_attrs)
+                unexplored_list.append({
+                    "name": subtask.name,
+                    "ui_index": ui_index,
+                    "description": subtask.description,
+                    "ui_attributes": first_attrs.to_dict() if first_attrs and hasattr(first_attrs, 'to_dict') else first_attrs,
+                })
             unexplored_subtasks[page_idx_key] = unexplored_list
 
             if page_idx_key not in subtask_graph:
@@ -157,6 +174,66 @@ def discover_node(state: dict) -> dict:
             f"{match_type}, {len(safe_subtasks)} subtasks, "
             f"{len(unexplored_subtasks.get(page_idx_key, []))} unexplored"
         )
+
+        # --- MobileGPT-V2 format memory pipeline ---
+        try:
+            # Build available_subtask dicts with trigger_ui_index
+            avail_subtask_dicts = []
+            trigger_uis_dict = {}
+            for s in safe_subtasks:
+                ui_attrs_list = keyuis.get(s.name, [])
+                first_attrs = ui_attrs_list[0] if ui_attrs_list else None
+                ui_idx = _find_keyui_index(parsed_xml, first_attrs)
+                avail_subtask_dicts.append({
+                    "name": s.name,
+                    "description": s.description,
+                    "parameters": s.parameters,
+                    "trigger_ui_index": ui_idx,
+                    "exploration": "unexplored",
+                })
+                if first_attrs:
+                    trigger_uis_dict[s.name] = first_attrs.to_dict() if hasattr(first_attrs, 'to_dict') else first_attrs
+
+            _explore_memory.add_page(
+                page_index=page_index,
+                available_subtasks=avail_subtask_dicts,
+                trigger_uis=trigger_uis_dict,
+                extra_uis=[],
+                parsed_xml=parsed_xml,
+                hierarchy_xml=hierarchy_xml,
+                encoded_xml=encoded_xml,
+                screenshot_path=screenshot_path,
+                raw_xml=raw_xml,
+                pretty_xml=pretty_xml,
+                screen_num=page_index,
+            )
+
+            # Generate and store summary
+            summary = _summary_agent.generate_summary(
+                encoded_xml=encoded_xml,
+                available_subtasks=avail_subtask_dicts,
+                screenshot_path=screenshot_path,
+            )
+            if summary:
+                _explore_memory.update_summary(page_index, summary)
+
+            # Add transition edge from previous page
+            if last_page is not None and last_subtask is not None and not last_was_back:
+                last_ui_idx = state.get("last_explored_ui_index", -1)
+                _explore_memory.add_transition(
+                    from_page=last_page,
+                    to_page=page_index,
+                    subtask_name=last_subtask,
+                    trigger_ui_index=last_ui_idx,
+                )
+                _explore_memory.update_end_page(
+                    page_index=last_page,
+                    subtask_name=last_subtask,
+                    trigger_ui_index=last_ui_idx,
+                    end_page=page_index,
+                )
+        except Exception as e:
+            logger.warning(f"ExploreMemory pipeline failed: {e}")
 
         # Save state
         from ...data.models import ExplorationState
@@ -214,21 +291,26 @@ def _find_keyui_index(parsed_xml: str, ui_attrs) -> int:
     if ui_attrs is None:
         return -1
     try:
-        from ...utils.xml_parser import find_matching_node_from_attributes
+        from ...matching.ui_matcher import UIMatcher
         from ...data.models import UIAttributes
         if isinstance(ui_attrs, dict):
             ui_attrs = UIAttributes(**ui_attrs)
-        node, index = find_matching_node_from_attributes(parsed_xml, ui_attrs)
-        return index if index is not None else -1
-    except Exception:
+        matcher = UIMatcher(parsed_xml)
+        indexes = matcher.get_matched_indexes(ui_attrs)
+        return indexes[0] if indexes else -1
+    except Exception as e:
+        logger.warning(f"_find_keyui_index failed: {e}")
         return -1
 
 
 def reset_discover_state():
     """Reset module-level singletons (for testing or reconnection)."""
     global _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
+    global _explore_memory, _summary_agent
     _subtask_extractor = None
     _keyui_selector = None
     _safety_filter = None
     _encoder = None
     _memory = None
+    _explore_memory = None
+    _summary_agent = None
