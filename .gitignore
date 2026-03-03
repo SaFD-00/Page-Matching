@@ -33,9 +33,12 @@ app_collector/.gradle/
 app_collector/local.properties
 
 # Collected data (runtime generated)
-MobileCollector/Server/data/_temp/
-MobileCollector/Server/data/apps.csv
-MobileCollector/Server/data/*/
+MobileGPT-Collector/Server/data/_temp/
+MobileGPT-Collector/Server/data/apps.csv
+MobileGPT-Collector/Server/data/*/
+
+# Memory (runtime generated, keep only core modules)
+MobileGPT-Collector/Server/memory/*/
 
 # Environment
 .env

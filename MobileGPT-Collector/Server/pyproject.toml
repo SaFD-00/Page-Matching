@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobilegpt_collector"
+version = "0.1.0"
+description = "KeyUI-based automatic mobile app screen data collector"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "openai>=1.0.0",
+    "google-genai>=1.51.0",
+    "pydantic>=2.0.0",
+    "lxml>=4.9.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "loguru>=0.7.0",
+    "langgraph>=0.2.0",
+    "langchain>=0.3.0",
+    "google-search-results>=2.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+mobilegpt_collector = "mobilegpt_collector.main:main"
+
+[tool.setuptools]
+packages = [
+    "mobilegpt_collector",
+    "mobilegpt_collector.agents",
+    "mobilegpt_collector.agents.prompts",
+    "mobilegpt_collector.data",
+    "mobilegpt_collector.graphs",
+    "mobilegpt_collector.graphs.nodes",
+    "mobilegpt_collector.handlers",
+    "mobilegpt_collector.matching",
+    "mobilegpt_collector.memory",
+    "mobilegpt_collector.storage",
+    "mobilegpt_collector.tests",
+    "mobilegpt_collector.utils",
+]
+package-dir = {"mobilegpt_collector" = "."}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
