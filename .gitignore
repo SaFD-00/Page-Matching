@@ -27,10 +27,10 @@ Thumbs.db
 *.aab
 *.dex
 *.class
-app_collector/build/
-app_collector/app/build/
-app_collector/.gradle/
-app_collector/local.properties
+**/app_collector/build/
+**/app_collector/app/build/
+**/app_collector/.gradle/
+**/app_collector/local.properties
 
 # Collected data (runtime generated)
 MobileGPT-Collector/Server/data/_temp/

@@ -169,7 +169,7 @@ python -m mobilegpt_collector.main
 | `--vision` / `--no-vision` | 활성화 | 비전 모드 (스크린샷 LLM 전송) |
 | `--data-dir` | ./data | 데이터 저장 경로 |
 | `--reasoning-effort` | medium | LLM 추론 강도 (none/low/medium/high) |
-| `--subtask-threshold` | 0.7 | Subtask 이름 overlap 임계값 (VARIANT 매칭) |
+| `--subtask-threshold` | 1.0 | Subtask 이름 overlap 임계값 (VARIANT 매칭) |
 | `--memory-dir` | ./memory | MobileGPT-V2 형식 메모리 저장 경로 |
 
 ```bash
@@ -291,7 +291,7 @@ memory/
 KeyUI 속성이 변경되었지만 기능적으로 동일한 화면(subtask 이름 집합이 유사)일 때 새 번들 대신 기존 번들에 다른 페이지로 저장합니다.
 
 - **조건 1**: encoded XML에 차이가 존재 (구조적으로 다른 화면)
-- **조건 2**: subtask 이름의 Jaccard 유사도 ≥ `subtask_threshold` (기본 0.7)
+- **조건 2**: subtask 이름의 Jaccard 유사도 ≥ `subtask_threshold` (기본 1.0)
 - **효과**: 동적 콘텐츠나 레이아웃 변화로 KeyUI가 달라져도 불필요한 번들 생성 방지
 
 ## Safety 필터

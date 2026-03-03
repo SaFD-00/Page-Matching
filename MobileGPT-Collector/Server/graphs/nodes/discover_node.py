@@ -7,7 +7,6 @@ from ...agents.safety_filter import SafetyFilter
 from ...agents.summary_agent import SummaryAgent
 from ...memory.collector_memory import CollectorMemory
 from ...memory.explore_memory import ExploreMemoryAdapter
-from ...storage.encoder import XmlEncoder
 from ...utils.llm_client import LLMClient
 from ...utils.xml_parser import extract_interactable_indexes
 
@@ -16,7 +15,6 @@ from ...utils.xml_parser import extract_interactable_indexes
 _subtask_extractor = None
 _keyui_selector = None
 _safety_filter = None
-_encoder = None
 _memory = None
 _explore_memory = None
 _summary_agent = None
@@ -24,7 +22,7 @@ _summary_agent = None
 
 def _get_components(state: dict):
     """Lazy-init components."""
-    global _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
+    global _subtask_extractor, _keyui_selector, _safety_filter, _memory
     global _explore_memory, _summary_agent
 
     if _subtask_extractor is None:
@@ -34,7 +32,6 @@ def _get_components(state: dict):
         _subtask_extractor = SubtaskExtractor(llm_client=llm_client)
         _keyui_selector = KeyUISelector(llm_client=llm_client)
         _safety_filter = SafetyFilter()
-        _encoder = XmlEncoder()
         _summary_agent = SummaryAgent(llm_client=llm_client)
 
     if _memory is None:
@@ -54,12 +51,12 @@ def _get_components(state: dict):
         )
         _explore_memory.initialize()
 
-    return _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
+    return _subtask_extractor, _keyui_selector, _safety_filter, _memory
 
 
 def discover_node(state: dict) -> dict:
     """Process a new screen - match, extract subtasks, store."""
-    subtask_extractor, keyui_selector, safety_filter, encoder, memory = _get_components(state)
+    subtask_extractor, keyui_selector, safety_filter, memory = _get_components(state)
 
     raw_xml = state["raw_xml"]
     parsed_xml = state["parsed_xml"]
@@ -305,12 +302,11 @@ def _find_keyui_index(parsed_xml: str, ui_attrs) -> int:
 
 def reset_discover_state():
     """Reset module-level singletons (for testing or reconnection)."""
-    global _subtask_extractor, _keyui_selector, _safety_filter, _encoder, _memory
+    global _subtask_extractor, _keyui_selector, _safety_filter, _memory
     global _explore_memory, _summary_agent
     _subtask_extractor = None
     _keyui_selector = None
     _safety_filter = None
-    _encoder = None
     _memory = None
     _explore_memory = None
     _summary_agent = None

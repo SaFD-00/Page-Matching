@@ -63,7 +63,7 @@ class CollectorServer:
 
     def _handle_client(self, client_socket: socket.socket, client_address: tuple):
         """Handle a single client connection."""
-        handler = MessageHandler(self.data_dir)
+        handler = MessageHandler(self.data_dir, self.memory_dir)
         graph = compile_collector_graph()
 
         # Reset node state for new connection

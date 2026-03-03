@@ -1,5 +1,6 @@
 """Safety filter for dangerous subtasks."""
 
+import re
 from loguru import logger
 
 from ..data.models import Subtask
@@ -35,10 +36,12 @@ class SafetyFilter:
         return safe, unsafe
 
     def _is_unsafe(self, subtask: Subtask) -> bool:
-        name_lower = subtask.name.lower()
+        name_tokens = set(subtask.name.lower().split("_"))
         desc_lower = subtask.description.lower()
 
         for keyword in self._unsafe_keywords:
-            if keyword in name_lower or keyword in desc_lower:
+            if keyword in name_tokens:
+                return True
+            if re.search(r'\b' + re.escape(keyword) + r'\b', desc_lower):
                 return True
         return False

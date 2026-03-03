@@ -9,7 +9,6 @@ from ..matching.page_registry import PageRegistry
 from ..matching.page_matcher import PageMatcher
 from ..matching.bundle_manager import BundleManager
 from ..storage.page_storage import PageStorage
-from ..storage.encoder import XmlEncoder
 from .state_persistence import StatePersistence
 
 
@@ -31,7 +30,6 @@ class CollectorMemory:
         )
         self.page_storage = PageStorage(data_dir)
         self.state_persistence = StatePersistence(data_dir, app_name)
-        self.encoder = XmlEncoder()
 
         # Page counter (global across all bundles)
         self._page_counter = 0
