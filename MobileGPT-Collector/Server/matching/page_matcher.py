@@ -133,17 +133,18 @@ class PageMatcher:
         return None
 
     def extract_new_subtasks(self, query_encoded_xml: str, match_result: MatchResult) -> list[Subtask]:
-        if match_result.match_type != "SUPERSET" or not match_result.remaining_ui_indexes:
+        if match_result.match_type != "SUPERSET":
             return []
         if self.llm_client is None:
             self.llm_client = LLMClient()
 
         bundle = self.registry.get(match_result.candidate_bundle_id)
         existing_subtasks = [{"name": s.name, "description": s.description} for s in bundle.subtasks] if bundle else []
+        excluded_names = [s.name for s in bundle.subtasks] if bundle else []
 
         system_prompt, user_prompt = expand_prompt.get_prompts(
             screen=query_encoded_xml, existing_subtasks=existing_subtasks,
-            remaining_ui_indexes=match_result.remaining_ui_indexes
+            excluded_subtask_names=excluded_names,
         )
         try:
             response = self.llm_client.query(system_prompt=system_prompt, user_prompt=user_prompt, is_json=True)

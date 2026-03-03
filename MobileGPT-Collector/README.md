@@ -22,6 +22,226 @@ MobileGPT-Collector는 **Android 클라이언트 앱**과 **Python 서버** 두 
 7. **GREEDY 탐색**: BFS 기반 최단 경로로 미탐색 서브태스크를 순차 탐색
 8. **메모리 파이프라인**: 수집 데이터를 MobileGPT-V2 Task mode에서 바로 사용 가능한 형식으로 저장
 
+### 처리 파이프라인 상세
+
+#### 1. LangGraph State Machine
+
+3개 노드로 구성된 LangGraph 상태 기계가 탐색 루프를 제어합니다:
+
+```
+START → supervisor ─┬─→ discover ────→ supervisor (루프)
+                    ├─→ explore_action → supervisor (루프)
+                    └─→ finish ──────→ END
+```
+
+**supervisor 라우팅 조건** (우선순위 순):
+
+| 우선순위 | 조건 | 다음 노드 |
+|---------|------|----------|
+| 1 | `action`이 이미 설정됨 | `finish` → END |
+| 2 | `status == "exploration_complete"` | `finish` → END |
+| 3 | `status == "error"` | `finish` → END |
+| 4 | `is_new_screen == True` | `discover` |
+| 5 | (기본값) | `explore_action` |
+
+`discover`와 `explore_action`은 항상 `supervisor`로 복귀하며, supervisor가 중앙 라우팅 허브 역할을 합니다.
+
+#### 2. XML 전처리
+
+Android UI Automator 원본 XML을 4가지 포맷으로 변환합니다:
+
+```
+raw_xml (Android XML)
+  ↓ reformat_xml() — class 기반 태그 변환 + simplify_structure() + 빈 bounds 제거
+  = parsed_xml
+
+parsed_xml
+  ↓ hierarchy_parse() — bounds/important/index/text 제거 + scroll 중복 제거
+  = hierarchy_xml
+
+parsed_xml
+  ↓ create_encoded_xml() — bounds/important/class 제거 (index 유지)
+  = encoded_xml
+
+encoded_xml
+  ↓ create_pretty_xml() — 들여쓰기 포맷
+  = pretty_xml
+```
+
+**태그 변환 규칙:**
+
+| Android class | HTML 태그 | 조건 |
+|--------------|-----------|------|
+| EditText | `<input>` | - |
+| checkable 요소 | `<checker>` | checked 속성 추가 |
+| clickable 요소 | `<button>` | - |
+| Layout 계열 | `<div>` | FrameLayout, LinearLayout 등 |
+| ImageView | `<img>` | - |
+| TextView | `<p>` | clickable이 아닌 경우 |
+| scrollable 요소 | `<scroll>` | - |
+
+**포맷별 용도:**
+
+| 포맷 | 용도 |
+|------|------|
+| Parsed XML | KeyUI 매칭 (bounds/index 포함), 페이지 저장 |
+| Hierarchy XML | 구조 기반 페이지 유사도 (OpenAI embedding) |
+| Encoded XML | LLM 입력 (subtask 추출, KeyUI 선택, 요약) |
+| Pretty XML | 사람이 읽기 위한 디버깅용 |
+
+#### 3. Subtask 추출 (LLM)
+
+`SubtaskExtractor`가 encoded XML에서 수행 가능한 서브태스크를 추출합니다.
+
+**추출 규칙:**
+- 인터랙터블 요소 식별: `<button>`, `<checker>`, `<input>`, `<scroll>`
+- 관련 액션을 고수준으로 병합 (예: `input_name` + `input_email` → `fill_in_info`)
+- **일반적 이름** 사용 (화면 특정 내용 배제: `call_contact` ○, `call_Bob` ✕)
+- 파라미터는 질문 형태로 정의 (예: `{"contact_name": "Who do you want to call?"}`)
+
+**출력 포맷:**
+```json
+{"subtasks": [
+  {"name": "search", "description": "Search for items", "parameters": {"query": "What to search for?"}}
+]}
+```
+
+실패 시 최대 2회 재시도하며, 응답 파싱은 다양한 JSON 키 (`subtasks`, `result`, `items`, `data`, `actions`)를 폴백으로 탐색합니다.
+
+#### 4. Safety 필터링
+
+`SafetyFilter`가 위험한 서브태스크를 자동 차단합니다. 상세 카테고리와 키워드는 [Safety 필터](#safety-필터) 섹션을 참조하세요.
+
+매칭 방식:
+1. subtask name을 `_`로 분리한 토큰이 키워드와 정확히 일치
+2. description에서 word boundary regex (`\b keyword \b`) 매칭
+
+반환: `(safe_subtasks, unsafe_subtasks)` 튜플
+
+#### 5. KeyUI 선택 (LLM)
+
+`KeyUISelector`가 각 서브태스크를 대표하는 UI 요소를 선택합니다.
+
+**4가지 선택 기준:**
+
+| 기준 | 설명 |
+|------|------|
+| Functional Relevance | subtask를 직접 트리거하거나 활성화하는 UI |
+| Uniqueness | 해당 subtask에 고유한 UI (다른 subtask와 구별) |
+| Stability | 유사 화면에서 일관되게 나타나는 UI |
+| Identifiability | 명확한 속성 보유 (id, description, text) |
+
+**선호/회피 UI 속성:**
+- **선호**: unique id, 명확한 text/description, `<button>/<input>/<checker>/<scroll>` 태그
+- **회피**: 모든 속성이 `NONE`, 동적 text, 비인터랙터블 요소
+
+출력: `{subtask_name: [UIAttributes]}` — `UIAttributes`는 self/parent/children 3계층 속성을 포함하며, children은 최대 depth 3까지 탐색합니다.
+
+#### 6. 페이지 매칭 (KeyUI 기반)
+
+`PageMatcher`가 현재 화면의 KeyUI 속성을 기존 번들의 KeyUI와 비교하여 매칭 타입을 판정합니다.
+
+**UIAttributes 비교 방식:**
+- self/parent/children 각 계층의 속성(tag, id, class, description)을 **exact match**로 비교
+- 값이 `NONE`인 속성은 비교에서 제외
+- children은 depth + rank 기반 위치 매칭 (최대 depth 3)
+
+**match_ratio 계산:**
+```
+match_ratio = len(supported_subtasks) / len(total_subtasks)
+```
+
+**5가지 매칭 타입 판정:**
+
+| 매칭 타입 | 조건 | 동작 |
+|-----------|------|------|
+| EQSET | `remaining == 0 && match_ratio == 1.0` | 기존 번들에 추가 |
+| SUBSET | `remaining == 0 && match_ratio > 0` | 기존 번들에 추가 |
+| SUPERSET | `remaining > 0 && match_ratio >= threshold` | 기존 번들 확장 |
+| VARIANT | KeyUI 불일치, Jaccard(subtask names) ≥ subtask_threshold, XML diff 존재 | 같은 번들에 다른 페이지로 추가 |
+| NEW | 위 조건 모두 미달 | 새 번들 생성 |
+
+**2단계 매칭 프로세스:**
+1. KeyUI 기반 매칭 → 우선순위: EQSET > SUPERSET > SUBSET
+2. 폴백: Subtask 이름 Jaccard 유사도 ≥ `subtask_threshold` + encoded XML diff 존재 → VARIANT
+
+#### 7. SUPERSET 확장 (Approach B)
+
+SUPERSET 매칭 시 기존 번들에 새로운 subtask를 추가하는 확장 프로세스입니다.
+
+**Approach B 방식:**
+- 전체 encoded XML + 기존 subtask exclusion list를 LLM에 전달
+- LLM이 화면 전체 맥락을 보고 exclusion list에 없는 새 subtask를 자유롭게 추출
+- remaining UI index를 제한 조건으로 사용하지 않음
+
+**확장 흐름:**
+```
+SUPERSET 판정
+  ↓
+expand_prompt: 전체 encoded_xml + excluded_subtask_names → LLM
+  ↓
+새 Subtask 목록 추출
+  ↓
+KeyUISelector: 새 subtask별 KeyUI 선택
+  ↓
+BundleManager.expand_bundle(): 번들에 새 subtask + KeyUI 추가 (중복 제거)
+  ↓
+PageRegistry 업데이트
+```
+
+**참고:** KeyUI 매칭에서 unsupported인 subtask (기존 KeyUI가 현재 화면에 없는 경우)는 해당 페이지에 없는 것으로 간주하며 복구하지 않습니다.
+
+#### 8. 데이터 저장 (Dual Format)
+
+수집 데이터를 두 가지 포맷으로 동시 저장합니다:
+
+**Collector Format** (`data/{app}/`):
+- `page_registry.json`: 전체 페이지 지식 (subtask, keyui, encoded_xml)
+- `bundle_map.json`: 번들 메타데이터 (subtask, pages, keyuis)
+- `{bundle}/{page}/`: 6개 XML 파일 + 스크린샷 + subtask.json + keyui.json
+
+**MobileGPT-V2 Memory Format** (`memory/{app}/`):
+- `pages.csv`: 글로벌 페이지 인덱스 (index, subtasks, trigger_uis, summary)
+- `hierarchy.csv`: hierarchy XML + OpenAI embedding (코사인 유사도 검색용)
+- `subtask_graph.json`: 페이지 간 전이 그래프 (nodes, edges)
+- `pages/{index}/`: available_subtasks.csv, subtasks.csv, actions.csv, screen/ 디렉토리
+
+MobileGPT-V2 Memory Format은 Task mode에서 바로 사용 가능한 형식으로, embedding 기반 페이지 검색(`threshold=0.95`)을 지원합니다.
+
+#### 9. GREEDY 탐색 알고리즘
+
+`explore_action_node`가 5단계 우선순위로 다음 액션을 결정합니다:
+
+**Priority 1 — 기존 navigation_plan 실행:**
+이전에 계획된 navigation_plan이 있으면 그 첫 번째 step을 실행합니다. forward(click) 또는 back 액션.
+
+**Priority 2 — 현재 페이지의 미탐색 subtask 탐색:**
+현재 페이지에 미탐색 subtask가 있으면 첫 번째 것을 선택하여 click 액션을 생성합니다. UI index가 유효하지 않으면 UIAttributes 재매칭으로 폴백합니다.
+
+**Priority 3 — BFS로 가장 가까운 미탐색 페이지 탐색:**
+`subtask_graph`와 `back_edges`를 사용해 BFS를 수행하여 미탐색 subtask가 있는 가장 가까운 페이지까지의 navigation_plan(forward/back 시퀀스)을 생성합니다.
+
+**Priority 4 — back 이동:**
+BFS에서도 경로를 찾지 못하면 traversal_path를 따라 back으로 복귀합니다.
+
+**Priority 5 — 탐색 완료:**
+루트에서 더 이상 탐색할 것이 없으면 `exploration_complete` 상태로 전환하여 종료합니다.
+
+각 click 액션 실행 후 `HistoryAgent`가 시각적 단서 기반 가이드라인을 생성하고, `ExploreMemoryAdapter`가 subtasks.csv와 actions.csv를 업데이트합니다.
+
+#### 10. LLM Agent 역할
+
+| Agent | 입력 | 출력 | 용도 |
+|-------|------|------|------|
+| SubtaskExtractor | encoded_xml | `list[Subtask]` | 화면에서 수행 가능한 서브태스크 추출 |
+| KeyUISelector | subtask + parsed_xml | `{name: [UIAttributes]}` | 서브태스크별 대표 UI 선택 |
+| SummaryAgent | encoded_xml + subtasks (+ screenshot) | 자연어 요약 (≤100단어) | 페이지 설명 생성 |
+| HistoryAgent | action + screen_xml | 가이드라인 문장 | 시각적 단서 기반 액션 설명 |
+
+모든 LLM Agent는 `LLMClient`를 공유하며, 설정 가능한 모델(`--model`, 기본 gpt-5.2)과 추론 강도(`--reasoning-effort`, 기본 medium)를 사용합니다.
+
+---
+
 ## 아키텍처
 
 ```
