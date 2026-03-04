@@ -177,17 +177,6 @@ class LLMClient:
 
         raise ValueError(f"Could not parse JSON from response: {content[:200]}...")
 
-    def query_list(self, system_prompt: str, user_prompt: str, **kwargs) -> list:
-        result = self.query(system_prompt, user_prompt, is_json=True, **kwargs)
-        if isinstance(result, list):
-            return result
-        elif isinstance(result, dict):
-            for key in ["result", "results", "items", "data", "subtasks", "actions"]:
-                if key in result and isinstance(result[key], list):
-                    return result[key]
-            return [result]
-        return [result]
-
     def query_dict(self, system_prompt: str, user_prompt: str, **kwargs) -> dict:
         result = self.query(system_prompt, user_prompt, is_json=True, **kwargs)
         if isinstance(result, dict):

@@ -1,4 +1,4 @@
-"""Independent memory system for MobileGPT-Collector."""
+"""Independent memory system for MobileCollector."""
 
 import os
 from typing import Optional
@@ -9,6 +9,7 @@ from ..matching.page_registry import PageRegistry
 from ..matching.page_matcher import PageMatcher
 from ..matching.bundle_manager import BundleManager
 from ..storage.page_storage import PageStorage
+from ..utils.embedding import DescriptionEmbeddingCache
 from .state_persistence import StatePersistence
 
 
@@ -16,17 +17,22 @@ class CollectorMemory:
     """Independent memory system combining PageRegistry, BundleManager, and PageStorage."""
 
     def __init__(self, data_dir: str, app_name: str, threshold: float = 1.0,
-                 subtask_threshold: float = 0.7):
+                 subtask_threshold: float = 0.7, desc_threshold: float = 0.85):
         self.data_dir = data_dir
         self.app_name = app_name
         self.threshold = threshold
         self.subtask_threshold = subtask_threshold
+        self.desc_threshold = desc_threshold
+
+        # Shared embedding cache
+        self._embedding_cache = DescriptionEmbeddingCache()
 
         # Core components
         self.registry = PageRegistry()
         self.bundle_manager = BundleManager(data_dir, app_name, self.registry)
         self.page_matcher = PageMatcher(
-            self.registry, threshold=threshold, subtask_threshold=subtask_threshold
+            self.registry, threshold=threshold, subtask_threshold=subtask_threshold,
+            desc_threshold=desc_threshold, embedding_cache=self._embedding_cache,
         )
         self.page_storage = PageStorage(data_dir)
         self.state_persistence = StatePersistence(data_dir, app_name)
@@ -47,7 +53,9 @@ class CollectorMemory:
                 self.bundle_manager.load_bundle_map()
                 self.page_matcher = PageMatcher(
                     self.registry, threshold=self.threshold,
-                    subtask_threshold=self.subtask_threshold
+                    subtask_threshold=self.subtask_threshold,
+                    desc_threshold=self.desc_threshold,
+                    embedding_cache=self._embedding_cache,
                 )
                 self._page_counter = state.page_counter
             logger.info(f"Resumed exploration: {state.total_pages_collected} pages, {state.bundle_count} bundles")
@@ -75,12 +83,13 @@ class CollectorMemory:
         page_index = self._page_counter
         self._page_counter += 1
 
-        # Find best match (with subtask fallback for VARIANT)
+        # Find best match (KeyUI + description verification + VARIANT fallback)
         subtask_names = [s.name for s in subtasks]
         match_result = self.page_matcher.find_best_match(
             parsed_xml, str(page_index),
             query_subtask_names=subtask_names,
             query_encoded_xml=encoded_xml,
+            query_subtasks=subtasks,
         )
 
         if match_result is None:

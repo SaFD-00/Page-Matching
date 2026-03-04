@@ -1,4 +1,4 @@
-"""Data models for MobileGPT-Collector."""
+"""Data models for MobileCollector."""
 
 from typing import Optional
 from pydantic import BaseModel, Field
@@ -57,6 +57,8 @@ class MatchResult(BaseModel):
     match_ratio: float = 0.0
     threshold: float = 1.0
     remaining_ui_indexes: list[int] = Field(default_factory=list)
+    demoted_subtasks: list[str] = Field(default_factory=list)
+    description_similarities: dict[str, float] = Field(default_factory=dict)
 
     def is_match(self) -> bool:
         return (

@@ -31,26 +31,3 @@ class HistoryAgent:
             logger.warning(f"Guidance generation failed: {e}")
             return ""
 
-    def generate_description(
-        self,
-        before_xml: str,
-        after_xml: str,
-        action: dict,
-    ) -> str:
-        """Generate action description (WHY + WHAT changed)."""
-        logger.info("Generating action description")
-        prompts = history_prompt.get_description_prompts(
-            before_xml=before_xml,
-            after_xml=after_xml,
-            action=action,
-        )
-        try:
-            response = self._llm.query(
-                system_prompt=prompts[0]["content"],
-                user_prompt=prompts[1]["content"],
-                is_json=False,
-            )
-            return response.strip() if isinstance(response, str) else str(response)
-        except Exception as e:
-            logger.warning(f"Description generation failed: {e}")
-            return ""

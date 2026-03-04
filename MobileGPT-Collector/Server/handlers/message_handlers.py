@@ -125,10 +125,3 @@ class MessageHandler:
         """Get current screenshot path."""
         return self.current_screenshot_path or ""
 
-    def reset(self):
-        """Reset per-connection state."""
-        self.app_name = None
-        self.app_package = None
-        self.current_screenshot_path = None
-        self.log_directory = None
-        self._screen_count = 0

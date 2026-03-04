@@ -1,6 +1,7 @@
 """Page knowledge registry."""
 
 from typing import Optional
+from loguru import logger
 
 from ..data.models import PageKnowledge, Subtask, UIAttributes
 
@@ -12,8 +13,19 @@ class PageRegistry:
         self._bundles: dict[str, PageKnowledge] = {}
         self._encoded_xmls: dict[str, list[str]] = {}  # bundle_id -> list of encoded XMLs
 
-    def add(self, page_knowledge: PageKnowledge) -> None:
+    def add(self, page_knowledge: PageKnowledge, embedding_cache=None) -> None:
         self._bundles[page_knowledge.bundle_id] = page_knowledge
+        if embedding_cache:
+            self._preload_embeddings(page_knowledge, embedding_cache)
+
+    def _preload_embeddings(self, page_knowledge: PageKnowledge, embedding_cache) -> None:
+        """Preload description embeddings for a bundle's subtasks."""
+        descriptions = [s.description for s in page_knowledge.subtasks if s.description]
+        if descriptions:
+            try:
+                embedding_cache.get_embeddings_batch(descriptions)
+            except Exception as e:
+                logger.debug(f"Preload embeddings failed for bundle {page_knowledge.bundle_id}: {e}")
 
     def get(self, bundle_id: str) -> Optional[PageKnowledge]:
         return self._bundles.get(bundle_id)
@@ -26,14 +38,6 @@ class PageRegistry:
 
     def has(self, bundle_id: str) -> bool:
         return bundle_id in self._bundles
-
-    def update_keyuis(self, bundle_id: str, keyuis: dict[str, list[UIAttributes]]) -> None:
-        if bundle_id in self._bundles:
-            self._bundles[bundle_id].keyuis = keyuis
-
-    def update_subtasks(self, bundle_id: str, subtasks: list[Subtask]) -> None:
-        if bundle_id in self._bundles:
-            self._bundles[bundle_id].subtasks = subtasks
 
     def add_subtask(self, bundle_id: str, subtask: Subtask, keyui_attrs: Optional[list[UIAttributes]] = None) -> None:
         if bundle_id in self._bundles:

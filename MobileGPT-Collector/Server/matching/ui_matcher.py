@@ -1,7 +1,6 @@
 """UI element matcher."""
 
 import xml.etree.ElementTree as ET
-from typing import Optional
 
 from ..data.models import UIAttributes
 from ..utils.xml_parser import (
@@ -52,9 +51,21 @@ class UIMatcher:
                 unsupported.append(subtask_name)
         return supported, unsupported, matched_indexes
 
+    def get_matched_indexes_for_subtask(
+        self, subtask_name: str, keyuis: dict[str, list[UIAttributes]]
+    ) -> set[int]:
+        """Get the matched indexes for a specific subtask's KeyUIs."""
+        indexes = set()
+        ui_attrs_list = keyuis.get(subtask_name, [])
+        for ui_attrs in ui_attrs_list:
+            matches = self.find_matching_uis(ui_attrs)
+            for node in matches:
+                index = node.get("index")
+                if index is not None:
+                    indexes.add(int(index))
+        return indexes
+
     def get_remaining_indexes(self, matched_indexes: set[int]) -> list[int]:
         all_interactable = set(self.get_all_interactable_indexes())
         return sorted(list(all_interactable - matched_indexes))
 
-    def find_element_by_index(self, index: int) -> Optional[ET.Element]:
-        return self.tree.find(f".//*[@index='{index}']")

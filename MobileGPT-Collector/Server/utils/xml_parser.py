@@ -244,40 +244,6 @@ def get_ui_key_attrib(ui_index: int, screen: str, include_desc: bool = True) -> 
     return {"self": its_attributes, "parent": parent_attributes, "children": children_attributes}
 
 
-def get_trigger_ui_attributes(trigger_ui_indexes: dict[str, list[int]], screen: str) -> dict[str, list[dict]]:
-    """Get trigger UI attributes for all subtasks.
-
-    Args:
-        trigger_ui_indexes: Dictionary mapping subtask names to UI indexes
-        screen: The XML screen content
-
-    Returns:
-        Dictionary mapping subtask names to lists of UI attributes
-    """
-    trigger_ui_data = {}
-
-    for subtask_name, ui_indexes in trigger_ui_indexes.items():
-        trigger_uis_attributes = []
-
-        for ui_index in ui_indexes:
-            ui_attributes = get_ui_key_attrib(int(ui_index), screen)
-
-            # Skip duplicates based on self attributes
-            skip = False
-            new_self_str = json.dumps(ui_attributes['self'], sort_keys=True)
-            for existing_attr in trigger_uis_attributes:
-                existing_self_str = json.dumps(existing_attr['self'], sort_keys=True)
-                if new_self_str == existing_self_str:
-                    skip = True
-                    break
-
-            if not skip:
-                trigger_uis_attributes.append(ui_attributes)
-
-        trigger_ui_data[subtask_name] = trigger_uis_attributes
-
-    return trigger_ui_data
-
 
 def extract_interactable_indexes(screen: str) -> list[int]:
     """Extract indexes of interactable UI elements.
@@ -312,34 +278,6 @@ def extract_interactable_indexes(screen: str) -> list[int]:
     return sorted(interactable_indexes)
 
 
-def get_extra_ui_attributes(trigger_ui_indexes: list[int], screen: str) -> list[dict]:
-    """Get attributes of UI elements that are NOT trigger UIs.
-
-    Args:
-        trigger_ui_indexes: List of trigger UI indexes to exclude
-        screen: The XML screen content
-
-    Returns:
-        List of UI attributes for extra (non-trigger) UIs
-    """
-    tree = ET.fromstring(screen)
-
-    extra_ui_indexes = []
-    for tag in ['input', 'button', 'checker']:
-        for node in tree.findall(f".//{tag}"):
-            index = node.attrib.get('index')
-            if index is not None:
-                idx = int(index)
-                if idx not in trigger_ui_indexes:
-                    extra_ui_indexes.append(idx)
-
-    extra_ui_attributes = []
-    for index in extra_ui_indexes:
-        ui_attributes = get_ui_key_attrib(index, screen)
-        extra_ui_attributes.append(ui_attributes)
-
-    return extra_ui_attributes
-
 
 def parse_xml_safely(xml_content: str) -> Optional[ET.Element]:
     """Safely parse XML content.
@@ -356,21 +294,3 @@ def parse_xml_safely(xml_content: str) -> Optional[ET.Element]:
         return None
 
 
-def get_all_ui_indexes(screen: str) -> list[int]:
-    """Get all UI indexes from the screen.
-
-    Args:
-        screen: The XML screen content
-
-    Returns:
-        List of all UI indexes
-    """
-    tree = ET.fromstring(screen)
-    indexes = []
-
-    for node in tree.iter():
-        index = node.attrib.get('index')
-        if index is not None:
-            indexes.append(int(index))
-
-    return sorted(indexes)

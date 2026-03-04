@@ -45,19 +45,6 @@ def recv_binary_data(client_socket: socket.socket, buffer_size: int = 4096) -> b
     return data
 
 
-def recv_xml(client_socket: socket.socket, save_dir: str, index: int, buffer_size: int = 4096) -> str:
-    """Receive XML data from client and save raw XML."""
-    raw_data = recv_binary_data(client_socket, buffer_size)
-    raw_xml = raw_data.decode().strip().replace('class=""', 'class="unknown"')
-
-    # Save raw XML
-    os.makedirs(save_dir, exist_ok=True)
-    raw_xml_path = os.path.join(save_dir, f"{index}.xml")
-    with open(raw_xml_path, 'w', encoding='utf-8') as f:
-        f.write(raw_xml)
-
-    return raw_xml
-
 
 def recv_xml_with_packages(
     client_socket: socket.socket,

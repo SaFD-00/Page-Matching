@@ -5,8 +5,6 @@ import threading
 from datetime import datetime
 from loguru import logger
 
-from .config import parse_args
-from .utils.logging import setup_logging
 from .utils.network import get_real_ip
 from .handlers.message_handlers import MessageHandler
 from .graphs.collector_graph import compile_collector_graph
@@ -19,7 +17,8 @@ class CollectorServer:
 
     def __init__(self, port: int, data_dir: str, threshold: float,
                  model: str, vision: bool, reasoning_effort: str,
-                 subtask_threshold: float = 0.7, memory_dir: str = "./memory"):
+                 subtask_threshold: float = 0.7, memory_dir: str = "./memory",
+                 desc_threshold: float = 0.85):
         self.port = port
         self.data_dir = data_dir
         self.threshold = threshold
@@ -28,6 +27,7 @@ class CollectorServer:
         self.reasoning_effort = reasoning_effort
         self.subtask_threshold = subtask_threshold
         self.memory_dir = memory_dir
+        self.desc_threshold = desc_threshold
         self.buffer_size = 4096
 
         # Ensure directories exist
@@ -93,6 +93,7 @@ class CollectorServer:
                         "data_dir": self.data_dir,
                         "threshold": self.threshold,
                         "subtask_threshold": self.subtask_threshold,
+                        "desc_threshold": self.desc_threshold,
                         "memory_dir": self.memory_dir,
                         "vision_enabled": self.vision,
                         "model": self.model,

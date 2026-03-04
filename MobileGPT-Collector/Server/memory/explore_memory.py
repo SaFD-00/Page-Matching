@@ -1,7 +1,7 @@
 """MobileGPT-V2 compatible memory adapter.
 
 Stores collected data in the same format as MobileGPT-V2's auto explore,
-allowing seamless data reuse between MobileGPT-Collector and MobileGPT-V2 Task mode.
+allowing seamless data reuse between MobileCollector and MobileGPT-V2 Task mode.
 
 Directory structure:
     memory/{app_name}/
@@ -27,11 +27,10 @@ import os
 import shutil
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 from loguru import logger
 
-from ..utils.embedding import get_openai_embedding, cosine_similarity, safe_literal_eval
+from ..utils.embedding import get_openai_embedding, safe_literal_eval
 
 
 # CSV column definitions
@@ -67,9 +66,6 @@ class ExploreMemoryAdapter:
         self.pages_db: Optional[pd.DataFrame] = None
         self.hierarchy_db: Optional[pd.DataFrame] = None
         self.subtask_graph: dict = {"nodes": [], "edges": []}
-
-        # Per-page managers keyed by page_index
-        self._page_dbs: dict[int, dict] = {}
 
     def initialize(self) -> None:
         """Create directory structure and load existing data."""
@@ -385,38 +381,6 @@ class ExploreMemoryAdapter:
             self.subtask_graph["nodes"].sort()
             self.subtask_graph["edges"].append(edge)
             self._save_subtask_graph()
-
-    # ─── Page Search ─────────────────────────────────────────────
-
-    def search_page(self, hierarchy_xml: str, threshold: float = 0.95) -> tuple[int, float]:
-        """Search for matching page using embedding cosine similarity.
-
-        Returns: (page_index, similarity) or (-1, 0.0) if no match.
-        """
-        if self.hierarchy_db is None or len(self.hierarchy_db) == 0:
-            return -1, 0.0
-
-        try:
-            new_embedding = np.array(get_openai_embedding(hierarchy_xml))
-        except Exception as e:
-            logger.warning(f"Embedding search failed: {e}")
-            return -1, 0.0
-
-        best_idx = -1
-        best_sim = 0.0
-        for _, row in self.hierarchy_db.iterrows():
-            emb = row.get("embedding")
-            if emb is None:
-                continue
-            emb_arr = np.array(emb) if not isinstance(emb, np.ndarray) else emb
-            sim = cosine_similarity(new_embedding, emb_arr)
-            if sim > best_sim:
-                best_sim = sim
-                best_idx = int(row["index"])
-
-        if best_sim >= threshold:
-            return best_idx, best_sim
-        return -1, 0.0
 
     # ─── Internal ────────────────────────────────────────────────
 

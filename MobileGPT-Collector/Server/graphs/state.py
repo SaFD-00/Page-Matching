@@ -1,6 +1,6 @@
 """LangGraph state definition for the collector graph."""
 
-from typing import Optional, Any
+from typing import Optional
 
 from typing_extensions import TypedDict
 
@@ -56,6 +56,7 @@ class CollectorState(TypedDict, total=False):
     # Memory pipeline
     memory_dir: str  # MobileGPT-V2 format memory directory
     subtask_threshold: float  # Subtask overlap threshold for VARIANT matching
+    desc_threshold: float  # Description cosine similarity threshold for subtask verification
 
     # Output
     action: Optional[dict]  # Action to send to client: {"name": str, "parameters": dict}

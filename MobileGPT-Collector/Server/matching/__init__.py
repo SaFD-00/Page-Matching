@@ -1,4 +1,4 @@
-"""Matching modules for MobileGPT-Collector Server."""
+"""Matching modules for MobileCollector Server."""
 
 from .page_registry import PageRegistry
 from .bundle_manager import BundleManager

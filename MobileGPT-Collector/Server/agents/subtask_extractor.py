@@ -42,15 +42,3 @@ class SubtaskExtractor:
             return [response]
         return []
 
-    def extract_with_retry(self, encoded_xml: str, max_retries: int = 2) -> list[Subtask]:
-        last_error = None
-        for attempt in range(max_retries + 1):
-            try:
-                subtasks = self.extract(encoded_xml)
-                if subtasks:
-                    return subtasks
-            except Exception as e:
-                last_error = e
-        if last_error:
-            logger.warning(f"Subtask extraction failed after {max_retries + 1} attempts: {last_error}")
-        return []

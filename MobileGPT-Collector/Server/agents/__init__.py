@@ -1,4 +1,4 @@
-"""Agents for MobileGPT-Collector."""
+"""Agents for MobileCollector."""
 
 from .app_agent import AppAgent
 from .keyui_selector import KeyUISelector

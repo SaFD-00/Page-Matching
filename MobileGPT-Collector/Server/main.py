@@ -24,6 +24,7 @@ def main():
     logger.info(f"  Reasoning: {args.reasoning_effort}")
     logger.info(f"  Subtask threshold: {args.subtask_threshold}")
     logger.info(f"  Memory dir: {args.memory_dir}")
+    logger.info(f"  Desc threshold: {args.desc_threshold}")
 
     server = CollectorServer(
         port=args.port,
@@ -34,6 +35,7 @@ def main():
         reasoning_effort=args.reasoning_effort,
         subtask_threshold=args.subtask_threshold,
         memory_dir=args.memory_dir,
+        desc_threshold=args.desc_threshold,
     )
 
     server.start()

@@ -1,5 +1,4 @@
 """Discover node - processes new screens."""
-import xml.etree.ElementTree as ET
 from loguru import logger
 from ...agents.subtask_extractor import SubtaskExtractor
 from ...agents.keyui_selector import KeyUISelector
@@ -8,7 +7,6 @@ from ...agents.summary_agent import SummaryAgent
 from ...memory.collector_memory import CollectorMemory
 from ...memory.explore_memory import ExploreMemoryAdapter
 from ...utils.llm_client import LLMClient
-from ...utils.xml_parser import extract_interactable_indexes
 
 
 # Module-level singletons (initialized on first use)
@@ -40,6 +38,7 @@ def _get_components(state: dict):
             app_name=state["app_name"],
             threshold=state.get("threshold", 1.0),
             subtask_threshold=state.get("subtask_threshold", 0.7),
+            desc_threshold=state.get("desc_threshold", 0.85),
         )
         _memory.initialize()
 

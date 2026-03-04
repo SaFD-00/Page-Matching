@@ -1,11 +1,10 @@
-"""XML encoder for MobileGPT-Collector format.
+"""XML encoder for MobileCollector format.
 
-Combines MobileGPT-Collector's Encoder.py and parseXML.py into a single module.
+Combines MobileCollector's Encoder.py and parseXML.py into a single module.
 Generates 4 XML formats: parsed, hierarchy_parsed, encoded, pretty.
 """
 
 import os
-import re
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
 
