@@ -64,7 +64,6 @@ Android 앱 실행 → 화면 캡처
   │  NEW      → 새 bundle 디렉토리 생성, 모든 데이터 저장    │
   │  EQSET    → 기존 bundle에 페이지 추가                   │
   │  SUPERSET → LLM으로 추가 subtask 추출 → 번들 확장       │
-  │  VARIANT  → 구조 다르지만 같은 기능 → 번들에 추가        │
   │                                                        │
   │  + MobileGPT-V2 호환 메모리 저장 (CSV + embedding)      │
   └────────────────────────────────────────────────────────┘
@@ -236,19 +235,18 @@ Step C: Match Type 판정
 match_ratio = len(verified_supported_subtasks) / len(total_subtasks)
 ```
 
-**5가지 매칭 타입 판정:**
+**4가지 매칭 타입 판정:**
 
 | 매칭 타입 | 조건 | 동작 |
 |-----------|------|------|
 | EQSET | `remaining == 0 && match_ratio == 1.0` | 기존 번들에 추가 |
 | SUBSET | `remaining == 0 && match_ratio > 0` | 기존 번들에 추가 |
 | SUPERSET | `remaining > 0 && match_ratio >= threshold` | 기존 번들 확장 |
-| VARIANT | KeyUI 불일치, Jaccard(subtask names) ≥ subtask_threshold, XML diff 존재 | 같은 번들에 다른 페이지로 추가 |
 | NEW | 위 조건 모두 미달 | 새 번들 생성 |
 
 **전체 매칭 흐름:**
-1. KeyUI 구조 매칭 + Description Similarity 검증 → 우선순위: EQSET > SUPERSET > SUBSET
-2. 폴백: Subtask 이름 Jaccard 유사도 ≥ `subtask_threshold` + encoded XML diff 존재 → VARIANT
+- KeyUI 구조 매칭 + Description Similarity 검증 → 우선순위: EQSET > SUPERSET > SUBSET
+- 모든 번들에 대해 매칭 실패 시 → NEW (새 번들 생성)
 
 #### 7. SUPERSET 확장 (Approach B)
 
@@ -475,7 +473,6 @@ python -m mobilegpt_collector.main
 | `--vision` / `--no-vision` | 활성화 | 비전 모드 (스크린샷 LLM 전송) |
 | `--data-dir` | ./data | 데이터 저장 경로 |
 | `--reasoning-effort` | medium | LLM 추론 강도 (none/low/medium/high) |
-| `--subtask-threshold` | 1.0 | Subtask 이름 overlap 임계값 (VARIANT 매칭) |
 | `--desc-threshold` | 0.85 | Description cosine similarity 임계값 (subtask 검증) |
 | `--memory-dir` | ./memory | MobileGPT-V2 형식 메모리 저장 경로 |
 
@@ -483,8 +480,8 @@ python -m mobilegpt_collector.main
 # 예시: 포트 8080, 임계값 0.8, 비전 비활성화
 python -m mobilegpt_collector.main --port 8080 --threshold 0.8 --no-vision
 
-# 예시: VARIANT 매칭 임계값 0.6, 메모리 커스텀 경로
-python -m mobilegpt_collector.main --subtask-threshold 0.6 --memory-dir ./custom_memory
+# 예시: 메모리 커스텀 경로
+python -m mobilegpt_collector.main --memory-dir ./custom_memory
 ```
 
 ---
@@ -592,16 +589,7 @@ memory/
 | EQSET | 모든 KeyUI 매칭 + description 검증 통과 + 남은 UI 없음 | 기존 번들에 추가 |
 | SUPERSET | threshold 이상 매칭 + description 검증 통과 + 남은 UI 있음 | 기존 번들 확장 (새 서브태스크 추출) |
 | SUBSET | 모든 UI 매칭 + description 검증 통과 + 일부 서브태스크만 | 기존 번들에 추가 |
-| **VARIANT** | **KeyUI 불일치, subtask 이름 overlap ≥ threshold, XML diff 존재** | **같은 번들의 다른 페이지로 추가** |
 | NEW | threshold 미달 또는 description 검증 실패 | 새 번들 생성 |
-
-### VARIANT 매칭
-
-KeyUI 속성이 변경되었지만 기능적으로 동일한 화면(subtask 이름 집합이 유사)일 때 새 번들 대신 기존 번들에 다른 페이지로 저장합니다.
-
-- **조건 1**: encoded XML에 차이가 존재 (구조적으로 다른 화면)
-- **조건 2**: subtask 이름의 Jaccard 유사도 ≥ `subtask_threshold` (기본 1.0)
-- **효과**: 동적 콘텐츠나 레이아웃 변화로 KeyUI가 달라져도 불필요한 번들 생성 방지
 
 ## Safety 필터
 
@@ -672,7 +660,7 @@ MobileGPT-Collector/
     │   └── page_storage.py         # 페이지 데이터 저장
     ├── matching/
     │   ├── ui_matcher.py           # UIAttributes 기반 UI 매칭
-    │   ├── page_registry.py        # PageKnowledge 레지스트리 + encoded_xml 저장
+    │   ├── page_registry.py        # PageKnowledge 레지스트리
     │   ├── page_matcher.py         # KeyUI + Description Similarity 기반 매칭 판정
     │   └── bundle_manager.py       # 번들 CRUD + 디스크 관리
     ├── memory/

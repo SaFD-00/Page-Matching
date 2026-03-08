@@ -1,4 +1,4 @@
-"""Bundle management for MobileCollector format."""
+"""Bundle management for MobileGPT-Collector format."""
 
 import json
 import os

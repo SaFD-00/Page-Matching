@@ -166,7 +166,7 @@ class TestPageRegistry:
         pk = PageKnowledge(bundle_id="0", app_name="test")
         reg.add(pk)
         reg.add_subtask("0", Subtask(name="new_task"))
-        assert "new_task" in reg.get("0").get_all_subtask_names()
+        assert "new_task" in [s.name for s in reg.get("0").subtasks]
 
     def test_add_subtask_no_duplicate(self):
         reg = PageRegistry()

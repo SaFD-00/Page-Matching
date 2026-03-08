@@ -37,8 +37,6 @@ def _get_components(state: dict):
             data_dir=state["data_dir"],
             app_name=state["app_name"],
             threshold=state.get("threshold", 1.0),
-            subtask_threshold=state.get("subtask_threshold", 0.7),
-            desc_threshold=state.get("desc_threshold", 0.85),
         )
         _memory.initialize()
 

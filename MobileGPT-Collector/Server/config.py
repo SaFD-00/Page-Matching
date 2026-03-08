@@ -14,15 +14,11 @@ SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 # Defaults
 DEFAULT_PORT = 12345
 DEFAULT_THRESHOLD = 1.0
-DEFAULT_SUBTASK_THRESHOLD = 1.0
 DEFAULT_MEMORY_DIR = "./memory"
 DEFAULT_MODEL = "gpt-5.2"
 DEFAULT_REASONING_EFFORT = "medium"
 DEFAULT_DATA_DIR = "./data"
 DEFAULT_VISION = True
-DEFAULT_DESC_SIMILARITY_THRESHOLD = 0.85
-EMBEDDING_MODEL = "text-embedding-3-small"
-
 # LLM settings
 MAX_RETRIES = 3
 RETRY_DELAY = 1.0
@@ -47,7 +43,5 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-vision", dest="vision", action="store_false", help="Disable vision mode")
     parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR, help=f"Data directory (default: {DEFAULT_DATA_DIR})")
     parser.add_argument("--reasoning-effort", type=str, default=DEFAULT_REASONING_EFFORT, help="Reasoning effort (none, low, medium, high)")
-    parser.add_argument("--subtask-threshold", type=float, default=DEFAULT_SUBTASK_THRESHOLD, help=f"Subtask overlap threshold for VARIANT matching (default: {DEFAULT_SUBTASK_THRESHOLD})")
     parser.add_argument("--memory-dir", type=str, default=DEFAULT_MEMORY_DIR, help=f"Memory directory for MobileGPT-V2 format (default: {DEFAULT_MEMORY_DIR})")
-    parser.add_argument("--desc-threshold", type=float, default=DEFAULT_DESC_SIMILARITY_THRESHOLD, help=f"Description cosine similarity threshold for subtask verification (default: {DEFAULT_DESC_SIMILARITY_THRESHOLD})")
     return parser.parse_args()

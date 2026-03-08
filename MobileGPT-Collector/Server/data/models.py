@@ -52,13 +52,11 @@ class MatchResult(BaseModel):
     """Result of matching a page against a bundle."""
     query_page_id: str = ""
     candidate_bundle_id: str = ""
-    match_type: str = "NEW"  # EQSET, SUBSET, SUPERSET, VARIANT, NEW
+    match_type: str = "NEW"  # EQSET, SUBSET, SUPERSET, NEW
     supported_subtasks: list[str] = Field(default_factory=list)
     match_ratio: float = 0.0
     threshold: float = 1.0
     remaining_ui_indexes: list[int] = Field(default_factory=list)
-    demoted_subtasks: list[str] = Field(default_factory=list)
-    description_similarities: dict[str, float] = Field(default_factory=dict)
 
     def is_match(self) -> bool:
         return (

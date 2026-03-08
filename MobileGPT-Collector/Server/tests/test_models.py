@@ -5,11 +5,9 @@ import pytest
 from mobilegpt_collector.data.models import (
     UIAttributes,
     Subtask,
-    KeyUI,
     PageKnowledge,
     MatchResult,
     BundleInfo,
-    PageData,
     ExplorationState,
 )
 
@@ -87,29 +85,15 @@ class TestSubtask:
         assert not hasattr(s, "extra_field")
 
 
-# ── KeyUI ──────────────────────────────────────────────────────────────
-
-
-class TestKeyUI:
-    def test_creation(self):
-        ui_attrs = UIAttributes(
-            **{"self": {"tag": "button"}, "parent": {}, "children": []}
-        )
-        k = KeyUI(subtask_name="click_search", ui_index=3, ui_attributes=ui_attrs)
-        assert k.subtask_name == "click_search"
-        assert k.ui_index == 3
-        assert k.ui_attributes.self_attrs == {"tag": "button"}
-
-
 # ── PageKnowledge ──────────────────────────────────────────────────────
 
 
 class TestPageKnowledge:
-    def test_get_all_subtask_names_empty(self):
+    def test_subtask_names_empty(self):
         pk = PageKnowledge(bundle_id="0", app_name="test")
-        assert pk.get_all_subtask_names() == []
+        assert [s.name for s in pk.subtasks] == []
 
-    def test_get_all_subtask_names(self):
+    def test_subtask_names(self):
         pk = PageKnowledge(
             bundle_id="0",
             app_name="test",
@@ -119,7 +103,7 @@ class TestPageKnowledge:
                 Subtask(name="profile"),
             ],
         )
-        assert pk.get_all_subtask_names() == ["search", "settings", "profile"]
+        assert [s.name for s in pk.subtasks] == ["search", "settings", "profile"]
 
 
 # ── MatchResult ────────────────────────────────────────────────────────
@@ -208,20 +192,6 @@ class TestBundleInfo:
         assert b.keyuis == {}
 
 
-# ── PageData ───────────────────────────────────────────────────────────
-
-
-class TestPageData:
-    def test_instantiation(self):
-        pd = PageData(app_name="TestApp", bundle_num=1, page_num=2)
-        assert pd.app_name == "TestApp"
-        assert pd.bundle_num == 1
-        assert pd.page_num == 2
-        assert pd.raw_xml_path == ""
-        assert pd.subtasks == []
-        assert pd.keyuis == {}
-
-
 # ── ExplorationState ───────────────────────────────────────────────────
 
 
@@ -229,15 +199,11 @@ class TestExplorationState:
     def test_instantiation_defaults(self):
         es = ExplorationState(app_name="TestApp")
         assert es.app_name == "TestApp"
-        assert es.algorithm == "GREEDY"
         assert es.threshold == 1.0
-        assert es.vision_enabled is True
         assert es.visited_pages == []
         assert es.bundle_count == 0
         assert es.total_pages_collected == 0
         assert es.page_counter == 0
-        assert es.last_action_was_back is False
-        assert es.last_back_from_page is None
 
     def test_instantiation_with_values(self):
         es = ExplorationState(

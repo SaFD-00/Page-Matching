@@ -1,4 +1,4 @@
-"""Storage modules for MobileCollector Server."""
+"""Storage modules for MobileGPT-Collector Server."""
 
 from .encoder import XmlEncoder
 from .page_storage import PageStorage
