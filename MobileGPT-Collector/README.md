@@ -36,7 +36,7 @@ Android 앱 실행 → 화면 캡처
   └────────────────────────────────────────────────────────┘
          │
          ▼
-  ┌─ 4. Description Cosine Similarity 검증 (★ 신규) ──────┐
+  ┌─ 4. Description Cosine Similarity 검증 ────────────────┐
   │  KeyUI가 매칭된 subtask에 대해:                          │
   │                                                        │
   │  bundle subtask: "Search for friends in contact list"  │
