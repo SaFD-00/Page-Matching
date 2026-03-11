@@ -17,7 +17,8 @@ class CollectorServer:
 
     def __init__(self, port: int, data_dir: str, threshold: float,
                  model: str, vision: bool, reasoning_effort: str,
-                 memory_dir: str = "./memory"):
+                 memory_dir: str = "./memory",
+                 matching: str = "keyui-mobilegpt"):
         self.port = port
         self.data_dir = data_dir
         self.threshold = threshold
@@ -25,6 +26,7 @@ class CollectorServer:
         self.vision = vision
         self.reasoning_effort = reasoning_effort
         self.memory_dir = memory_dir
+        self.matching = matching
         self.buffer_size = 4096
 
         # Ensure directories exist
@@ -41,7 +43,7 @@ class CollectorServer:
         server_socket.listen()
 
         logger.info(f"Server listening on {real_ip}:{self.port}")
-        logger.info(f"Config: threshold={self.threshold}, model={self.model}, vision={self.vision}")
+        logger.info(f"Config: matching={self.matching}, threshold={self.threshold}, model={self.model}, vision={self.vision}")
 
         try:
             while True:
@@ -89,6 +91,7 @@ class CollectorServer:
                         "app_package": handler.app_package,
                         "data_dir": self.data_dir,
                         "threshold": self.threshold,
+                        "matching": self.matching,
                         "memory_dir": self.memory_dir,
                         "vision_enabled": self.vision,
                         "model": self.model,

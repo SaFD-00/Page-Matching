@@ -37,6 +37,7 @@ def _get_components(state: dict):
             data_dir=state["data_dir"],
             app_name=state["app_name"],
             threshold=state.get("threshold", 1.0),
+            matching=state.get("matching", "keyui-mobilegpt"),
         )
         _memory.initialize()
 

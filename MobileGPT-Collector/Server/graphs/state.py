@@ -17,6 +17,7 @@ class CollectorState(TypedDict, total=False):
     app_package: str
     data_dir: str
     threshold: float
+    matching: str  # "keyui-mobilegpt", "embedding"
     vision_enabled: bool
     model: str
     reasoning_effort: str

@@ -18,6 +18,7 @@ def main():
     logger.info("MobileGPT-Collector starting...")
     logger.info(f"  Port: {args.port}")
     logger.info(f"  Model: {args.model}")
+    logger.info(f"  Matching: {args.matching}")
     logger.info(f"  Threshold: {args.threshold}")
     logger.info(f"  Vision: {args.vision}")
     logger.info(f"  Data dir: {args.data_dir}")
@@ -32,6 +33,7 @@ def main():
         vision=args.vision,
         reasoning_effort=args.reasoning_effort,
         memory_dir=args.memory_dir,
+        matching=args.matching,
     )
 
     server.start()

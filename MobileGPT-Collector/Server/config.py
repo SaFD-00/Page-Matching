@@ -13,11 +13,12 @@ SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 
 # Defaults
 DEFAULT_PORT = 12345
-DEFAULT_THRESHOLD = 1.0
+DEFAULT_THRESHOLD = 0.7
 DEFAULT_MEMORY_DIR = "./memory"
 DEFAULT_MODEL = "gpt-5.2"
 DEFAULT_REASONING_EFFORT = "medium"
-DEFAULT_DATA_DIR = "./data"
+DEFAULT_DATA_DIR = None  # Auto-determined from --matching strategy
+DEFAULT_MATCHING = "keyui-mobilegpt"
 DEFAULT_VISION = True
 # LLM settings
 MAX_RETRIES = 3
@@ -41,7 +42,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"LLM model (default: {DEFAULT_MODEL})")
     parser.add_argument("--vision", action="store_true", default=True, help="Enable vision mode (default)")
     parser.add_argument("--no-vision", dest="vision", action="store_false", help="Disable vision mode")
-    parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR, help=f"Data directory (default: {DEFAULT_DATA_DIR})")
+    parser.add_argument("--matching", type=str, default=DEFAULT_MATCHING,
+                        choices=["keyui-mobilegpt", "embedding"],
+                        help=f"Page matching strategy (default: {DEFAULT_MATCHING})")
+    parser.add_argument("--data-dir", type=str, default=DEFAULT_DATA_DIR, help="Data directory (default: ./data/{matching})")
     parser.add_argument("--reasoning-effort", type=str, default=DEFAULT_REASONING_EFFORT, help="Reasoning effort (none, low, medium, high)")
     parser.add_argument("--memory-dir", type=str, default=DEFAULT_MEMORY_DIR, help=f"Memory directory for MobileGPT-V2 format (default: {DEFAULT_MEMORY_DIR})")
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    # Auto-determine data_dir from matching strategy if not explicitly set
+    if args.data_dir is None:
+        args.data_dir = f"./data/{args.matching}"
+
+    return args

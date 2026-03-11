@@ -8,6 +8,8 @@ from ..data.models import Subtask, UIAttributes, ExplorationState, MatchResult
 from ..matching.page_registry import PageRegistry
 from ..matching.page_matcher import PageMatcher
 from ..matching.bundle_manager import BundleManager
+from ..matching.base import MatchingStrategy
+from ..matching.factory import create_strategy
 from ..storage.page_storage import PageStorage
 from .state_persistence import StatePersistence
 
@@ -15,19 +17,29 @@ from .state_persistence import StatePersistence
 class CollectorMemory:
     """Independent memory system combining PageRegistry, BundleManager, and PageStorage."""
 
-    def __init__(self, data_dir: str, app_name: str, threshold: float = 1.0):
+    def __init__(self, data_dir: str, app_name: str, threshold: float = 1.0,
+                 matching: str = "keyui-mobilegpt"):
         self.data_dir = data_dir
         self.app_name = app_name
         self.threshold = threshold
+        self.matching_name = matching
 
         # Core components
         self.registry = PageRegistry()
         self.bundle_manager = BundleManager(data_dir, app_name, self.registry)
-        self.page_matcher = PageMatcher(
-            self.registry, threshold=threshold,
-        )
         self.page_storage = PageStorage(data_dir)
         self.state_persistence = StatePersistence(data_dir, app_name)
+
+        # Create matching strategy
+        strategy_kwargs = {}
+        if matching == "keyui-mobilegpt":
+            strategy_kwargs["match_threshold"] = threshold if threshold != 0.7 else 0.7
+        elif matching == "embedding":
+            strategy_kwargs["threshold"] = threshold if threshold != 0.7 else 0.95
+        self.matching_strategy: MatchingStrategy = create_strategy(matching, **strategy_kwargs)
+
+        # Keep page_matcher for backward compatibility (used by V2 strategy internally)
+        self.page_matcher = PageMatcher(self.registry, threshold=threshold)
 
         # Page counter (global across all bundles)
         self._page_counter = 0
@@ -47,6 +59,10 @@ class CollectorMemory:
                     self.registry, threshold=self.threshold,
                 )
                 self._page_counter = state.page_counter
+
+                # Load strategy-specific data (e.g., embedding index)
+                self.matching_strategy.load(self.data_dir, self.app_name)
+
             logger.info(f"Resumed exploration: {state.total_pages_collected} pages, {state.bundle_count} bundles")
             return state
 
@@ -72,15 +88,18 @@ class CollectorMemory:
         page_index = self._page_counter
         self._page_counter += 1
 
-        # Find best match (KeyUI-based)
-        match_result = self.page_matcher.find_best_match(
-            parsed_xml, str(page_index),
+        # Find best match using the configured strategy
+        match_result = self.matching_strategy.find_best_match(
+            parsed_xml, hierarchy_xml, str(page_index), self.registry,
         )
 
         if match_result is None:
             # NEW page - create new bundle
             bundle_num = self.bundle_manager.create_bundle(subtasks, keyuis)
             page_num = self.bundle_manager.add_page_to_bundle(bundle_num, page_index)
+
+            # Notify strategy of new bundle (e.g., for embedding storage)
+            self.matching_strategy.on_bundle_created(str(bundle_num), hierarchy_xml)
         else:
             bundle_num = int(match_result.candidate_bundle_id)
 
@@ -124,6 +143,9 @@ class CollectorMemory:
         self.state_persistence.save_state(state)
         self.state_persistence.save_registry(self.registry)
         self.bundle_manager.save_bundle_map()
+
+        # Save strategy-specific data (e.g., embedding index)
+        self.matching_strategy.save(self.data_dir, self.app_name)
 
     def get_page_counter(self) -> int:
         return self._page_counter
