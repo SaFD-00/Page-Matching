@@ -24,7 +24,7 @@ def _get_components(state: dict):
     global _explore_memory, _summary_agent
 
     if _subtask_extractor is None:
-        model = state.get("model", "gpt-5.2")
+        model = state.get("model", "gpt-5.4")
         reasoning = state.get("reasoning_effort", "medium")
         llm_client = LLMClient(model=model, reasoning_effort=reasoning)
         _subtask_extractor = SubtaskExtractor(llm_client=llm_client)

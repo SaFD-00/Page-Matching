@@ -16,7 +16,7 @@ def _get_explore_components(state: dict):
     """Lazy-init history agent and get shared explore memory from discover_node."""
     global _history_agent
     if _history_agent is None:
-        model = state.get("model", "gpt-5.2")
+        model = state.get("model", "gpt-5.4")
         reasoning = state.get("reasoning_effort", "medium")
         llm_client = LLMClient(model=model, reasoning_effort=reasoning)
         _history_agent = HistoryAgent(llm_client=llm_client)
